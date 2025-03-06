@@ -26,9 +26,9 @@ class B2Trainer(_BaseTrainer):
     """
 
     def __init__(self, checkpoint_path: str = None, history_path: str = None):
-        print("Initializing B2Trainer...")  
+        print("Initializing B2Trainer...")  # Debug log
         super().__init__(checkpoint_path, history_path)
-        print("B2Trainer initialized successfully.")  
+        print("B2Trainer initialized successfully.")  # Debug log
 
     def _init_values(self):
         self.train_loss, self.train_correct, self.train_total = 0.0, 0, 0
@@ -36,7 +36,7 @@ class B2Trainer(_BaseTrainer):
         self.test_loss, self.test_correct, self.test_total = 0.0, 0, 0
 
     def _prepare_loaders(self):
-        print("Preparing data loaders for PlayerDataset...")  
+        print("Preparing data loaders for PlayerDataset...")  # Debug log
         train_dataset = PlayerDataset(type=DatasetType.TRAIN)
         val_dataset = PlayerDataset(type=DatasetType.VAL)
         test_dataset = PlayerDataset(type=DatasetType.TEST)
@@ -46,10 +46,10 @@ class B2Trainer(_BaseTrainer):
         self.train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
         self.val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
         self.test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
-        print("Data loaders prepared successfully.")  
+        print("Data loaders prepared successfully.")  # Debug log
 
     def _prepare_model(self):
-        print("Initializing ResNet50 for feature extraction...")  
+        print("Initializing ResNet50 for feature extraction...")  # Debug log
         self.model = BaseModel(
             backbone=models.resnet50(weights=models.ResNet50_Weights.DEFAULT),
             level=ClassificationLevel.PLAYER
@@ -57,29 +57,29 @@ class B2Trainer(_BaseTrainer):
             .set_backbone_requires_grad(False) \
             .set_backbone_layer_requires_grad('layer4', True) \
             .set_backbone_layer_requires_grad('fc', True)
-        print("Model initialized successfully.")  
+        print("Model initialized successfully.")  # Debug log
 
     def _prepare_optimizer(self):
-        print("Preparing optimizer and loss function...")  
+        print("Preparing optimizer and loss function...")  # Debug log
         self.criterion = nn.CrossEntropyLoss()
         self.optimizer = optim.Adam(
             (p for p in self.model.parameters() if p.requires_grad),
             lr=self.get_bl_cf().training.learning_rate
         )
         self.scheduler = lr_scheduler.ReduceLROnPlateau(self.optimizer, mode='min', factor=0.1, patience=2)
-        print("Optimizer and scheduler prepared successfully.")  
+        print("Optimizer and scheduler prepared successfully.")  # Debug log
 
     def _to_available_device(self):
-        print("Moving model and optimizer to available device...")  
+        print("Moving model and optimizer to available device...")  # Debug log
         self.model.to_available_device()
         self.criterion.to(get_device())
         for state in self.optimizer.state.values():
             if isinstance(state, torch.Tensor):
                 state.data = state.data.to(get_device())
-        print("Model moved to device successfully.")  
+        print("Model moved to device successfully.")  # Debug log
 
     def _get_checkpoint(self, checkpoint_path: str = None) -> B2Checkpoint:
-        print("Initializing checkpoint...") 
+        print("Initializing checkpoint...")  # Debug log
         return B2Checkpoint(
             input_path=checkpoint_path,
             epoch=0,
@@ -89,7 +89,7 @@ class B2Trainer(_BaseTrainer):
         )
 
     def _get_history(self, history_path: str = None) -> B2History:
-        print("Initializing training history...")  
+        print("Initializing training history...")  # Debug log
         return B2History(history_path)
 
     def _get_train_loader(self):
@@ -108,6 +108,7 @@ class B2Trainer(_BaseTrainer):
         self.model.eval()
 
     def _train_batch_step(self, inputs, labels):
+        """Performs a single training step."""
         self.optimizer.zero_grad()
         outputs = self.model(inputs)
         loss = self.criterion(outputs, labels)
@@ -121,6 +122,7 @@ class B2Trainer(_BaseTrainer):
         self.train_total += labels.size(0)
 
     def _eval_batch_step(self, inputs, labels):
+        """Performs a single validation step."""
         outputs = self.model(inputs)
         loss = self.criterion(outputs, labels)
 
@@ -130,6 +132,7 @@ class B2Trainer(_BaseTrainer):
         self.val_total += labels.size(0)
 
     def _test_batch_step(self, inputs, labels):
+        """Performs a single test step."""
         outputs = self.model(inputs)
         loss = self.criterion(outputs, labels)
 
@@ -139,15 +142,18 @@ class B2Trainer(_BaseTrainer):
         self.test_total += labels.size(0)
 
     def _on_test_step(self):
+        """Final test step logging."""
         print(f"Test Results:\nLoss: {self.test_loss/len(self.test_loader):.4f}, Acc: {100 * self.test_correct/self.test_total:.2f}%")
 
     def _on_checkpoint_load(self) -> int:
+        """Loads the model, optimizer, and scheduler from checkpoint."""
         checkpoint: B2Checkpoint = self._checkpoint
         self.model.load_state_dict(checkpoint.model_state)
         self.optimizer.load_state_dict(checkpoint.optimizer_state)
         self.scheduler.load_state_dict(checkpoint.scheduler_state)
 
     def _on_epoch_step(self, epoch: int):
+        """Saves the model state at the end of each epoch."""
         self.scheduler.step(self.val_loss)
         self._checkpoint.update_state(
             epoch=epoch,
@@ -164,6 +170,7 @@ class B2Trainer(_BaseTrainer):
         )
 
     def _save_trained_model(self):
-        print("Saving trained model...")  
+        """Saves the trained model."""
+        print("Saving trained model...")  # Debug log
         torch.save(self.model, self._model_path)
-        print("Model saved successfully.")  
+        print("Model saved successfully.")  # Debug log
