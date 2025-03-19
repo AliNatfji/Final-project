@@ -1,0 +1,80 @@
+{
+  "id": "B2",
+  "description": "This Baseline fine-tunes ResNet50 to classify individual players from cropped images using 9 volleyball actions.",
+  "output_dir": "B2",
+  "dataset": {
+    "past_frames_count": 0,
+    "post_frames_count": 0,
+    "preprocess": {
+      "transforms": {
+        "player": {
+          "train": [
+            {
+              "type": "resize",
+              "args": {
+                "width": 224,
+                "height": 224
+              }
+            },
+            {
+              "type": "to_tensor",
+              "args": null
+            },
+            {
+              "type": "normalize",
+              "args": {
+                "mean": [0.485, 0.456, 0.406],
+                "std": [0.229, 0.224, 0.225]
+              }
+            }
+          ],
+          "val": [
+            {
+              "type": "resize",
+              "args": {
+                "width": 224,
+                "height": 224
+              }
+            },
+            {
+              "type": "to_tensor",
+              "args": null
+            },
+            {
+              "type": "normalize",
+              "args": {
+                "mean": [0.485, 0.456, 0.406],
+                "std": [0.229, 0.224, 0.225]
+              }
+            }
+          ],
+          "test": [
+            {
+              "type": "resize",
+              "args": {
+                "width": 224,
+                "height": 224
+              }
+            },
+            {
+              "type": "to_tensor",
+              "args": null
+            },
+            {
+              "type": "normalize",
+              "args": {
+                "mean": [0.485, 0.456, 0.406],
+                "std": [0.229, 0.224, 0.225]
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  "training": {
+    "epochs": 20,
+    "batch_size": 64,
+    "learning_rate": 0.001
+  }
+}

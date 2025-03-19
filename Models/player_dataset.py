@@ -1,4 +1,4 @@
-from PIL import Image
+from PIL import Image, ImageFile
 import torch
 import torchvision.transforms as transforms
 from Enums.classification_level import ClassificationLevel
@@ -7,68 +7,63 @@ from Models.base_dataset import _BaseDataset, _BaseDatasetItem
 from Models.box import BoxInfo
 from Utils.dataset import get_frame_img_path
 
+ImageFile.LOAD_TRUNCATED_IMAGES = True  # Prevent crashes on truncated images
 
 class PlayerDataset(_BaseDataset):
-    """
-    Placeholder class for player-level classification dataset.
-    Inherits from _Dataset.
-    """
-
     def __init__(self, type: DatasetType):
-        """
-        Initializes the PlayerDataset by setting classification level to PLAYER.
-
-        Args:
-            type (DatasetType): Type of dataset (TRAIN, VAL, TEST).
-        """
         super().__init__(type)
+        self._flatten_dataset = self.get_flatten()
 
     def get_flatten(self) -> list[list['PlayerDatasetItem']]:
-        dataset: list[list[PlayerDatasetItem]] = []
-        for _, v in self._videos_annotations.items():
-            for __, c in v.get_all_clips_annotations():
-                items: dict[int, list[PlayerDatasetItem]] = {
-                    i: [] for i in range(12)
-                }
-                for frame_ID, boxes in c.get_within_range_frame_boxes():
+        dataset = []
+        for _, video_annotation in self._videos_annotations.items():
+            for __, clip in video_annotation.get_all_clips_annotations():
+                players_dict = {i: [] for i in range(12)}
+                for frame_id, boxes in clip.get_within_range_frame_boxes():
                     for box in boxes:
-                        items[box.player_ID] += [PlayerDatasetItem(
-                            video=v.video,
-                            clip=c.clip,
-                            frame=frame_ID,
-                            img_path=get_frame_img_path(
-                                v.video, c.clip, frame_ID),
+                        item = PlayerDatasetItem(
+                            video=video_annotation.video,
+                            clip=clip.clip,
+                            frame=frame_id,
+                            img_path=get_frame_img_path(video_annotation.video, clip.clip, frame_id),
                             box=box
-                        )]
-                for item in items.values():
-                    dataset.append(item)
+                        )
+                        players_dict[box.player_ID].append(item)
+                dataset.extend(players_dict.values())
         return dataset
 
-    def __getitem__(self, index) -> tuple[torch.Tensor, torch.Tensor]:
-        items: list[PlayerDatasetItem] = self._flatten_dataset[index]
+    def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor]:
+        items = self._flatten_dataset[index]
+        images = []
 
-        player_imgs: list[torch.Tensor] = []
         for item in items:
             try:
-                player_imgs += [Image.open(item.img_path).convert(
-                    'RGB').crop(item.box.box)]
-            except FileNotFoundError:
-                raise FileNotFoundError(f"Image not found at {item.img_path}")
+                img = Image.open(item.img_path).convert("RGB").crop(item.box.box)
+                images.append(img)
+            except Exception as e:
+                print(f"[WARNING] Skipping image at {item.img_path}: {e}")
 
-        for i in range(len(player_imgs)):
-            if self.has_bl_cf():
-                player_imgs[i] = self.get_bl_cf().dataset.preprocess.get_transforms(
-                    ClassificationLevel.PLAYER, self._type
-                )(player_imgs[i])
-            else:
-                player_imgs[i] = transforms.ToTensor()(player_imgs[i])
+        if not images:
+            print(f"[ERROR] No valid player images found at index {index}")
+            dummy = Image.new("RGB", (224, 224))
+            tensor = self.get_bl_cf().dataset.preprocess.get_transforms(
+                ClassificationLevel.PLAYER, self._type
+            )(dummy)
+            return tensor.unsqueeze(0), torch.tensor(0)
 
-        y_label = torch.Tensor(
-            [self.get_cf().dataset.get_encoded_category(
-                ClassificationLevel.PLAYER, item.box.category
-            )]
-        ).to(torch.long)
-        return torch.stack(player_imgs), y_label[0]
+        for i in range(len(images)):
+            images[i] = self.get_bl_cf().dataset.preprocess.get_transforms(
+                ClassificationLevel.PLAYER, self._type
+            )(images[i])
+
+        label = self.get_cf().dataset.get_encoded_category(
+            ClassificationLevel.PLAYER, items[0].box.category
+        )
+
+        return torch.stack(images), torch.tensor(label)
+
+    def __len__(self) -> int:
+        return len(self._flatten_dataset)
 
 
 class PlayerDatasetItem(_BaseDatasetItem):
