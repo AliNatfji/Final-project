@@ -209,16 +209,23 @@ class _BaseTrainer(_ConfigMixin, ABC):
 
         self._save_trained_model()
 
-    def evaluate(self):
-        self._eval_mode()
 
+
+    def evaluate(self):
+        if self._get_val_loader() is None:
+            print("[WARNING] Skipping evaluation because validation dataset is empty!")
+            return  # Exit function early if no validation data
+
+        self._eval_mode()
         with torch.no_grad():
-            for inputs, labels in self._get_val_loader():
-                inputs, labels = inputs.to(
-                    get_device()), labels.to(get_device())
-                self._eval_batch_step(inputs, labels)
+            for inputs, labels in self._get_val_loader():  # This used to fail
+                self._eval_batch_step(inputs, labels)          
 
     def test(self):
+        if self._get_test_loader() is None:
+            print("[WARNING] Skipping testing because test dataset is empty!")
+            return  # Exit function early if no test data
+        
         self._eval_mode()
         self._init_values()
         self._to_available_device()

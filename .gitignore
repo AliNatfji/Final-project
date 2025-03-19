@@ -7,3 +7,8 @@ main.py
 Dataset
 Output
 Final-Output
+
+local-config.json
+train_b2_local.py
+test_b2_local.py
+train_b2_log.txt
